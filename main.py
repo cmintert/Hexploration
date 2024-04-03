@@ -1,12 +1,10 @@
 import math
-
+import sys
 from typing import Dict, Tuple, List
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-
-import sys
 
 
 class Main:
