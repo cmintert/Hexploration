@@ -34,9 +34,11 @@ class Game:
     """Game class is responsible for starting up a new game."""
 
     def __init__(self):
+        # Placeholder for structure
         pass
 
     def setup(self):
+        # Placeholder for structure
         pass
 
 
@@ -44,18 +46,23 @@ class GameController:
     """GameController class is responsible for controlling the flow of the game."""
 
     def __init__(self):
+        # Placeholder for structure
         pass
 
     def start_game(self):
+        # Placeholder for structure
         pass
 
     def end_game(self):
+        # Placeholder for structure
         pass
 
     def pause_game(self):
+        # Placeholder for structure
         pass
 
     def resume_game(self):
+        # Placeholder for structure
         pass
 
 
@@ -158,7 +165,7 @@ class BoardWidget(QWidget):
         self.board = board
         self.hex_radius = 30
 
-        self.draw_coordinates = False
+        self.draw_coordinates: bool = False
 
     def toggle_coordinates(self):
         self.draw_coordinates = not self.draw_coordinates
