@@ -2,9 +2,9 @@ import math
 import sys
 from typing import Dict, Tuple, List
 
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-from PyQt5.QtCore import *
+from PyQt5.QtCore import QPointF
+from PyQt5.QtGui import QPainter, QPolygonF, QFontMetrics
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
 
 
 class Main:
@@ -21,9 +21,7 @@ class Main:
         app = QApplication(sys.argv)
         window = MainWindow(live_board)
         window.show()
-        app.exec_()
-
-        print(live_board.hexes)
+        app.exec()
 
 
 class HexPositionError(Exception):
@@ -140,6 +138,18 @@ class MainWindow(QMainWindow):
         self.boardWidget = BoardWidget(board, self)
         self.setCentralWidget(self.boardWidget)
 
+        self.button = QPushButton("Toggle Coordinates", self)
+        self.button.clicked.connect(self.boardWidget.toggle_coordinates)
+        self.button.move(10, 10)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.boardWidget)
+        layout.addWidget(self.button)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
 
 class BoardWidget(QWidget):
     def __init__(self, board: Board, parent=None):
@@ -148,16 +158,24 @@ class BoardWidget(QWidget):
         self.board = board
         self.hex_radius = 30
 
+        self.draw_coordinates = False
+
+    def toggle_coordinates(self):
+        self.draw_coordinates = not self.draw_coordinates
+        self.update()  # Redraw the widget
+
     def paintEvent(self, event):
+        """Paint the board with hexagons and their coordinates."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         for hex_coords, hexagon in self.board.hexes.items():
             self.draw_hex(painter, hexagon)
-            self.draw_coordiantes(painter, hexagon)
+            if self.draw_coordinates is True:
+                self.draw_coordiantes(painter, hexagon)
 
     def draw_hex(self, painter, hex: Hexagon):
-
+        """Draw a single hexagon on the board, based on its q,r coordinates and radius."""
         center_x_y: Tuple[int, int] = self.calc_hex_pixel_coordinates(hex)
         hex_points: List = self.calc_hex_corner_points(center_x_y)
 
@@ -165,14 +183,43 @@ class BoardWidget(QWidget):
         painter.drawPolygon(polygon)
 
     def draw_coordiantes(self, painter, hex: Hexagon):
+        """Draw the q,r coordinates of a hexagon on the board in text form."""
 
+        coordinate_text: str = f"{hex.q}, {hex.r}"
         center_x_y: Tuple[int, int] = self.calc_hex_pixel_coordinates(hex)
-        painter.drawText(center_x_y[0], center_x_y[1], f"{hex.q}, {hex.r}")
+
+        # offset the coordinate_text to center on center_x_y of hex
+        offset_x_y: Tuple[int, int] = self.get_offset_to_textcenter(
+            painter, coordinate_text
+        )
+
+        painter.drawText(
+            center_x_y[0] - offset_x_y[0],
+            center_x_y[1] + offset_x_y[1],
+            coordinate_text,
+        )
+
+    def get_offset_to_textcenter(self, painter: object, text: str) -> Tuple[int, int]:
+        """Calculate the bbox center of a given text for qt5 painter"""
+        font_metrics: QFontMetrics = QFontMetrics(painter.font())
+
+        text_width: int = font_metrics.horizontalAdvance(text)
+        text_height: int = font_metrics.height()
+
+        # Adjust the x and y coordinates
+        x_offset: int = round(text_width / 2)
+        # We use 1/4 instead of 1/2 to better center the text vertically
+        y_offset: int = round(text_height / 4)
+
+        return (x_offset, y_offset)
 
     def calc_hex_pixel_coordinates(self, hex: Hexagon) -> Tuple[int, int]:
-        # Offset to capture the whole hex inside the widget area
-        x_offset = self.hex_radius
-        y_offset = self.hex_radius
+        """Calculate the pixel coordinates of a hexagon on the board based on its q,r
+        coordinates and its radius. It starts in upper left corner of drawing area, therefore
+        we need to add an offset to capture the whole hex inside the widget area."""
+
+        x_offset: int = self.hex_radius
+        y_offset: int = self.hex_radius
 
         x: int = round(self.hex_radius * math.sqrt(3) * (hex.q + hex.r / 2) + x_offset)
         y: int = round(self.hex_radius * 3 / 2 * hex.r + y_offset)
@@ -180,7 +227,8 @@ class BoardWidget(QWidget):
         return (x, y)
 
     def calc_hex_corner_points(self, center_x_y: Tuple[int, int]) -> List:
-        hex_points = []
+        """Calculate the corner points of a hexagon based on its center coordinates and radius"""
+        hex_points: list = []
         for i in range(6):
             angle_deg = 60 * i - 30
             angle_rad = math.pi / 180 * angle_deg
