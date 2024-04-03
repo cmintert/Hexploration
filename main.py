@@ -100,8 +100,8 @@ class Board:
             {}
         )  # Dictionary with q,r coordinates as keys and hexes as values
         self.edges: List[Edge] = []
-        self.size_x: int = 9
-        self.size_y: int = 9
+        self.size_x: int = 20
+        self.size_y: int = 20
 
     def setup_board(self):
         for r in range(self.size_x):
@@ -156,6 +156,11 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+        self.resize(
+            self.boardWidget.calculate_board_size()[0],
+            self.boardWidget.calculate_board_size()[1],
+        )
 
 
 class BoardWidget(QWidget):
@@ -243,6 +248,21 @@ class BoardWidget(QWidget):
             y = center_x_y[1] + self.hex_radius * math.sin(angle_rad)
             hex_points.append(QPointF(x, y))
         return hex_points
+
+    def calculate_board_size(self) -> Tuple[int, int]:
+        """Calculate the size of the board based on the hexagons. Return the width and height of the board
+        as a tuple (x,y)."""
+
+        size_x: int = self.board.size_x
+        size_y: int = self.board.size_y
+
+        board_width: float = size_x * self.hex_radius * math.sqrt(3)
+        board_height: float = size_y * self.hex_radius * 1.5
+
+        window_width: int = round(board_width + 50)
+        window_height: int = round(board_height + 90)
+
+        return (window_width, window_height)
 
 
 Main.start_game()
