@@ -2,9 +2,9 @@ import math
 import sys
 from typing import Dict, Tuple, List
 
-from PyQt5.QtCore import QPointF
-from PyQt5.QtGui import QPainter, QPolygonF, QFontMetrics
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPainter, QPolygonF, QFontMetrics
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
 
 
 class Main:
@@ -179,7 +179,7 @@ class BoardWidget(QWidget):
     def paintEvent(self, event):
         """Paint the board with hexagons and their coordinates."""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         for hex_coords, hexagon in self.board.hexes.items():
             self.draw_hex(painter, hexagon)

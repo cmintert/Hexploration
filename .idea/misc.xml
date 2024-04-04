@@ -4,10 +4,10 @@
     <option name="enabledOnReformat" value="true" />
     <option name="enabledOnSave" value="true" />
     <option name="pathToExecutable" value="C:\Users\chris\AppData\Local\Programs\Python\Python311\Scripts\black.exe" />
-    <option name="sdkName" value="Python 3.9 (Hexplorator)" />
+    <option name="sdkName" value="Python 3.12 (Hexplorator)" />
   </component>
   <component name="GithubDefaultAccount">
     <option name="defaultAccountId" value="eb301b67-1b37-4b1e-a32f-aacbfada266a" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.9 (Hexplorator)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (Hexplorator)" project-jdk-type="Python SDK" />
 </project>
