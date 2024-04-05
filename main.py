@@ -1,10 +1,19 @@
 import math
 import sys
+import os
+
 from typing import Dict, Tuple, List
 
 from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPainter, QPolygonF, QFontMetrics
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
+from PyQt6.QtGui import QPainter, QPolygonF, QFontMetrics, QPixmap
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QPushButton,
+    QVBoxLayout,
+    QGraphicsSceneWheelEvent,
+)
 
 
 class Main:
@@ -17,6 +26,14 @@ class Main:
     def start_game():
         live_board = Board()
         live_board.setup_board()
+
+        live_board.change_hex(
+            TerrainFactory().create_terrain_at(
+                "forest",
+                6,
+                5,
+            )
+        )
 
         app = QApplication(sys.argv)
         window = MainWindow(live_board)
@@ -72,7 +89,77 @@ class Hexagon:
     def __init__(self, q: int = 0, r: int = 0):
         self.q: int = q
         self.r: int = r
+        self.s: int = -q - r
         self.cube_coordinates_q_r: Tuple[int, int] = (q, r)  # q,r coordinates
+
+
+class TerrainHex(Hexagon):
+    def __init__(self, q: int = 0, r: int = 0):
+        super().__init__(q, r)
+        self.game_piece_type: str = "terrain"
+        self.move_cost: int = 1
+
+    def __str__(self):
+        return f"{self.game_piece_type} at {self.q}, {self.r}"
+
+
+class TerrainFactory:
+    def __init__(self):
+        # The factory has no need for attributes at this point
+        pass
+
+    def create_terrain_at(self, terrain_type: str, q: int, r: int) -> Hexagon:
+        if terrain_type == "forest":
+            return ForestHex(q, r)
+        elif terrain_type == "mountain":
+            return MountainHex(q, r)
+        elif terrain_type == "water":
+            return WaterHex(q, r)
+        elif terrain_type == "plain":
+            return PlainHex(q, r)
+        else:
+            raise ValueError("Invalid terrain type")
+
+
+class ForestHex(TerrainHex):
+
+    def __init__(self, q: int = 0, r: int = 0):
+        super().__init__(q, r)
+        self.type = "forest"
+        self.graphic = "assets/forest.png"
+
+    def __str__(self):
+        return f"{self.type} at {self.q}, {self.r}"
+
+
+class MountainHex(TerrainHex):
+    def __init__(self, q: int = 0, r: int = 0):
+        super().__init__(q, r)
+        self.type: str = "mountain"
+        self.graphic: str = "assets/mountain.png"
+
+    def __str__(self):
+        return f"{self.type} at {self.q}, {self.r}"
+
+
+class WaterHex(TerrainHex):
+    def __init__(self, q: int = 0, r: int = 0):
+        super().__init__(q, r)
+        self.type: str = "water"
+        self.graphic: str = "assets/water.png"
+
+    def __str__(self):
+        return f"{self.type} at {self.q}, {self.r}"
+
+
+class PlainHex(TerrainHex):
+    def __init__(self, q: int = 0, r: int = 0):
+        super().__init__(q, r)
+        self.type: str = "plain"
+        self.graphic: str = "assets/plain.png"
+
+    def __str__(self):
+        return f"{self.type} at {self.q}, {self.r}"
 
 
 class Edge:
@@ -120,7 +207,6 @@ class Board:
         if self.is_hex_present(hex) is False:
             raise HexPositionError("delete_hex: No hex at this position")
         del self.hexes[hex.cube_coordinates_q_r]
-        print(f"Hexagon at {hex.cube_coordinates_q_r} has been deleted")
 
     def change_hex(self, hex: Hexagon):
         if self.is_hex_present(hex) is True:
@@ -168,9 +254,53 @@ class BoardWidget(QWidget):
         super().__init__(parent)
 
         self.board = board
-        self.hex_radius = 30
+        self._hex_radius: int = 30
+
+        self.MATH_SQRT3 = math.sqrt(3)
+        self.MATH_PI_DIV_180 = math.pi / 180
 
         self.draw_coordinates: bool = False
+
+        self.hex_coordinate_cache: dict = {}
+        self.hex_corner_point_cache: dict = {}
+
+    def zoom_wheel_event(self, event: QGraphicsSceneWheelEvent):
+        """Zoom in or out based on the mouse wheel event. Zooming is based on recalculating the hex radius."""
+        if event.angleDelta().y() > 0:
+            self.zoom_in()
+        else:
+            self.zoom_out()
+
+        event.accept()
+
+    def zoom_in(self):
+
+        zoom_step = 10
+        new_radius = self._hex_radius + zoom_step
+        self.set_hex_radius(new_radius)
+
+    def zoom_out(self):
+
+        zoom_step = 10
+        new_radius = self._hex_radius - zoom_step
+        self.set_hex_radius(new_radius)
+
+    def get_hex_radius(self) -> int:
+        return self._hex_radius
+
+    def set_hex_radius(self, radius: int) -> None:
+
+        if radius == self._hex_radius:
+            return
+
+        self.clear_caches()
+        self._hex_radius = radius
+        self.update()
+
+    def clear_caches(self):
+        """Clear the hex coordinate and hex corner point caches."""
+        self.hex_coordinate_cache = {}
+        self.hex_corner_point_cache = {}
 
     def toggle_coordinates(self):
         self.draw_coordinates = not self.draw_coordinates
@@ -182,11 +312,34 @@ class BoardWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         for hex_coords, hexagon in self.board.hexes.items():
-            self.draw_hex(painter, hexagon)
+            self.draw_hex_outline(painter, hexagon)
+
+            self.draw_terrain(painter, hexagon)
+
             if self.draw_coordinates is True:
                 self.draw_coordiantes(painter, hexagon)
 
-    def draw_hex(self, painter, hex: Hexagon):
+    def draw_terrain(self, painter: QPainter, hexagon: Hexagon):
+        """Draw the terrain of a hexagon on the board."""
+
+        if hasattr(hexagon, "graphic"):
+
+            image = QPixmap(hexagon.graphic)
+
+            imageposition_x, imageposition_y = self.calc_hex_pixel_coordinates(hexagon)
+
+            x_size = round(self._hex_radius * math.sqrt(3))
+            y_size = round(2.3 * self._hex_radius)
+
+            painter.drawPixmap(
+                imageposition_x - round(x_size / 2),
+                imageposition_y - round(y_size / 2),
+                x_size,
+                y_size,
+                image,
+            )
+
+    def draw_hex_outline(self, painter: QPainter, hex: Hexagon):
         """Draw a single hexagon on the board, based on its q,r coordinates and radius."""
         center_x_y: Tuple[int, int] = self.calc_hex_pixel_coordinates(hex)
         hex_points: List = self.calc_hex_corner_points(center_x_y)
@@ -211,7 +364,7 @@ class BoardWidget(QWidget):
             coordinate_text,
         )
 
-    def get_offset_to_textcenter(self, painter: object, text: str) -> Tuple[int, int]:
+    def get_offset_to_textcenter(self, painter: QPainter, text: str) -> Tuple[int, int]:
         """Calculate the bbox center of a given text for qt5 painter"""
         font_metrics: QFontMetrics = QFontMetrics(painter.font())
 
@@ -230,23 +383,37 @@ class BoardWidget(QWidget):
         coordinates and its radius. It starts in upper left corner of drawing area, therefore
         we need to add an offset to capture the whole hex inside the widget area."""
 
-        x_offset: int = self.hex_radius
-        y_offset: int = self.hex_radius
+        if hex in self.hex_coordinate_cache:
+            return self.hex_coordinate_cache[hex]
 
-        x: int = round(self.hex_radius * math.sqrt(3) * (hex.q + hex.r / 2) + x_offset)
-        y: int = round(self.hex_radius * 3 / 2 * hex.r + y_offset)
+        x_offset: int = self._hex_radius
+        y_offset: int = self._hex_radius
+
+        x: int = round(
+            self._hex_radius * self.MATH_SQRT3 * (hex.q + hex.r / 2) + x_offset
+        )
+        y: int = round(self._hex_radius * 3 / 2 * hex.r + y_offset)
+
+        self.hex_coordinate_cache[hex] = (x, y)
 
         return (x, y)
 
     def calc_hex_corner_points(self, center_x_y: Tuple[int, int]) -> List:
         """Calculate the corner points of a hexagon based on its center coordinates and radius"""
+
+        if center_x_y in self.hex_corner_point_cache:
+            return self.hex_corner_point_cache[center_x_y]
+
         hex_points: list = []
         for i in range(6):
             angle_deg = 60 * i - 30
-            angle_rad = math.pi / 180 * angle_deg
-            x = center_x_y[0] + self.hex_radius * math.cos(angle_rad)
-            y = center_x_y[1] + self.hex_radius * math.sin(angle_rad)
+            angle_rad = self.MATH_PI_DIV_180 * angle_deg
+            x = center_x_y[0] + self._hex_radius * math.cos(angle_rad)
+            y = center_x_y[1] + self._hex_radius * math.sin(angle_rad)
             hex_points.append(QPointF(x, y))
+
+        self.hex_corner_point_cache[center_x_y] = hex_points
+
         return hex_points
 
     def calculate_board_size(self) -> Tuple[int, int]:
@@ -256,8 +423,8 @@ class BoardWidget(QWidget):
         size_x: int = self.board.size_x
         size_y: int = self.board.size_y
 
-        board_width: float = size_x * self.hex_radius * math.sqrt(3)
-        board_height: float = size_y * self.hex_radius * 1.5
+        board_width: float = size_x * self._hex_radius * math.sqrt(3)
+        board_height: float = size_y * self._hex_radius * 1.5
 
         window_width: int = round(board_width + 50)
         window_height: int = round(board_height + 90)
