@@ -1,19 +1,18 @@
 import math
 import sys
-import os
 
 from typing import Dict, Tuple, List
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPainter, QPolygonF, QFontMetrics, QPixmap
-from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QPushButton,
-    QVBoxLayout,
-    QGraphicsSceneWheelEvent,
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import (
+    QPainter,
+    QPolygonF,
+    QFontMetrics,
+    QPixmap,
+    QWheelEvent,
+    QMouseEvent,
 )
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
 
 
 class Main:
@@ -264,26 +263,122 @@ class BoardWidget(QWidget):
         self.hex_coordinate_cache: dict = {}
         self.hex_corner_point_cache: dict = {}
 
-    def zoom_wheel_event(self, event: QGraphicsSceneWheelEvent):
-        """Zoom in or out based on the mouse wheel event. Zooming is based on recalculating the hex radius."""
-        if event.angleDelta().y() > 0:
-            self.zoom_in()
+        self.panning = False
+        self.last_mouse_pos = None
+
+    def get_mouse_position_in_board(self, event: QMouseEvent) -> Tuple[int, int]:
+        """Get the current mouse position in the board's coordinate system."""
+        return (event.position().x(), event.position().y())
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and event.modifiers() == Qt.KeyboardModifier.AltModifier
+            and self.rect().contains(event.pos())
+        ):
+            self.panning = True
+            self.last_mouse_pos = event.pos()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
         else:
-            self.zoom_out()
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.panning is True:
+
+            delta = event.pos() - self.last_mouse_pos
+            self.last_mouse_pos = event.pos()
+
+            scaling_factor = 1  # Adjust this value to your liking
+            scaled_delta_x = delta.x() * scaling_factor
+            scaled_delta_y = delta.y() * scaling_factor
+
+            new_x = round(self.x() + scaled_delta_x)
+            new_y = round(self.y() + scaled_delta_y)
+
+            self.move(new_x, new_y)
+            self.update()
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.panning = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent):
+        """Zoom in or out based on the mouse wheel event. Zooming is based on recalculating the hex radius."""
+
+        if event.angleDelta().y() > 0:
+            self.zoom_in(event)
+        else:
+            self.zoom_out(event)
 
         event.accept()
 
-    def zoom_in(self):
+    def zoom_in(self, event: QWheelEvent):
 
-        zoom_step = 10
-        new_radius = self._hex_radius + zoom_step
+        original_board_size: Tuple[int, int] = self.calculate_board_size()
+        zoom_step: int = 5
+        new_radius: int = self._hex_radius + zoom_step
+
+        new_radius = self.limit_zoom(new_radius)
+
         self.set_hex_radius(new_radius)
 
-    def zoom_out(self):
+        self.zoom_movement(event, original_board_size)
 
-        zoom_step = 10
-        new_radius = self._hex_radius - zoom_step
+        self.update()
+
+    def zoom_out(self, event: QWheelEvent):
+
+        original_board_size: Tuple[int, int] = self.calculate_board_size()
+        zoom_step: int = 5
+        new_radius: int = self._hex_radius - zoom_step
+
+        new_radius = self.limit_zoom(new_radius)
+
         self.set_hex_radius(new_radius)
+
+        self.zoom_movement(event, original_board_size)
+
+        self.update()
+
+    def limit_zoom(self, new_radius: int) -> int:
+        min_radius: int = 30
+        max_radius: int = 150
+
+        if new_radius < min_radius:
+            new_radius = min_radius
+        elif new_radius > max_radius:
+            new_radius = max_radius
+
+        return new_radius
+
+    def zoom_movement(
+        self, event: QWheelEvent, original_board_size: Tuple[int, int] = None
+    ):
+        initial_area = original_board_size[0] * original_board_size[1]
+        new_area = self.width() * self.height()
+
+        # Square root because we scale both width and height
+        scale_factor = (new_area / initial_area) ** 0.5
+
+        scale_change = scale_factor - 1
+
+        offset_x = round(-(event.position().x() * scale_change))
+        offset_y = round(-(event.position().y() * scale_change))
+
+        self.move(self.x() + offset_x, self.y() + offset_y)
+
+    def update_board_size(self):
+
+        new_size: Tuple[int, int] = self.calculate_board_size()
+        self.resize(new_size[0], new_size[1])
 
     def get_hex_radius(self) -> int:
         return self._hex_radius
@@ -295,7 +390,7 @@ class BoardWidget(QWidget):
 
         self.clear_caches()
         self._hex_radius = radius
-        self.update()
+        self.update_board_size()
 
     def clear_caches(self):
         """Clear the hex coordinate and hex corner point caches."""
@@ -324,12 +419,12 @@ class BoardWidget(QWidget):
 
         if hasattr(hexagon, "graphic"):
 
-            image = QPixmap(hexagon.graphic)
+            image: QPixmap = QPixmap(hexagon.graphic)
 
             imageposition_x, imageposition_y = self.calc_hex_pixel_coordinates(hexagon)
 
-            x_size = round(self._hex_radius * math.sqrt(3))
-            y_size = round(2.3 * self._hex_radius)
+            x_size: int = round(self._hex_radius * self.MATH_SQRT3)
+            y_size: int = round(2.3 * self._hex_radius)
 
             painter.drawPixmap(
                 imageposition_x - round(x_size / 2),
@@ -408,8 +503,8 @@ class BoardWidget(QWidget):
         for i in range(6):
             angle_deg = 60 * i - 30
             angle_rad = self.MATH_PI_DIV_180 * angle_deg
-            x = center_x_y[0] + self._hex_radius * math.cos(angle_rad)
-            y = center_x_y[1] + self._hex_radius * math.sin(angle_rad)
+            x = center_x_y[0] + self.get_hex_radius() * math.cos(angle_rad)
+            y = center_x_y[1] + self.get_hex_radius() * math.sin(angle_rad)
             hex_points.append(QPointF(x, y))
 
         self.hex_corner_point_cache[center_x_y] = hex_points
@@ -423,11 +518,11 @@ class BoardWidget(QWidget):
         size_x: int = self.board.size_x
         size_y: int = self.board.size_y
 
-        board_width: float = size_x * self._hex_radius * math.sqrt(3)
-        board_height: float = size_y * self._hex_radius * 1.5
+        board_width: int = math.ceil(size_x * self.get_hex_radius() * self.MATH_SQRT3)
+        board_height: int = math.ceil(size_y * self.get_hex_radius() * 1.5)
 
-        window_width: int = round(board_width + 50)
-        window_height: int = round(board_height + 90)
+        window_width: int = board_width + self.get_hex_radius() * 2
+        window_height: int = board_height + self.get_hex_radius() * 2
 
         return (window_width, window_height)
 

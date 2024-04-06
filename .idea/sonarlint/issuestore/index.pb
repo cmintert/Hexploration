@@ -57,3 +57,5 @@ w
 G.idea/sonarlint/issuestore/b/0/b0bb0a26d88d16d2e82502fe47e034e248a527a2,f\1\f175c85ef48f99500714570ff900625ac8b4e2c1
 Å
 Q.idea/sonarlint/securityhotspotstore/b/0/b0bb0a26d88d16d2e82502fe47e034e248a527a2,a\b\abff979ab89f5a1c300ea665b38e61345dcf9043
+@
+requirements.txt,1\9\19359a61ae2446b51b549167b014da2fcf265768
