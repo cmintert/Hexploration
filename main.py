@@ -11,6 +11,7 @@ from PyQt6.QtGui import (
     QPixmap,
     QWheelEvent,
     QMouseEvent,
+    QColor,
 )
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
 
@@ -403,6 +404,7 @@ class BoardWidget(QWidget):
 
     def paintEvent(self, event):
         """Paint the board with hexagons and their coordinates."""
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
