@@ -1,5 +1,6 @@
 import math
 import sys
+import logging
 
 from typing import Dict, Tuple, List
 
@@ -39,6 +40,25 @@ class Main:
         window = MainWindow(live_board)
         window.show()
         app.exec()
+
+
+class GameLogger:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        self.file_handler = logging.FileHandler("hexagon_game.log")
+        self.file_handler.setLevel(logging.INFO)
+        self.formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s"
+        )
+        self.file_handler.setFormatter(self.formatter)
+        self.logger.addHandler(self.file_handler)
+
+    def get_logger(self):
+        return self.logger
+
+    def log(self, message):
+        self.logger.info(message)
 
 
 class HexPositionError(Exception):
@@ -253,6 +273,8 @@ class BoardWidget(QWidget):
     def __init__(self, board: Board, parent=None):
         super().__init__(parent)
 
+        self.logger = GameLogger().get_logger()
+
         self.board = board
         self._hex_radius: int = 30
 
@@ -263,6 +285,8 @@ class BoardWidget(QWidget):
 
         self.hex_coordinate_cache: dict = {}
         self.hex_corner_point_cache: dict = {}
+        self.map_buffer: QPixmap = None
+        self.map_buffer_valid: bool = False
 
         self.panning = False
         self.last_mouse_pos = None
@@ -390,6 +414,7 @@ class BoardWidget(QWidget):
             return
 
         self.clear_caches()
+        self.map_buffer_valid = False
         self._hex_radius = radius
         self.update_board_size()
 
@@ -400,13 +425,27 @@ class BoardWidget(QWidget):
 
     def toggle_coordinates(self):
         self.draw_coordinates = not self.draw_coordinates
+        self.map_buffer_valid = False
         self.update()  # Redraw the widget
 
     def paintEvent(self, event):
-        """Paint the board with hexagons and their coordinates."""
 
+        if self.map_buffer is None or self.map_buffer_valid is False:
+            self.logger.info("Drawing scene to buffer.")
+            self.map_buffer = self.draw_scene()
+            self.map_buffer_valid = True
+
+        pixmap = self.map_buffer
         painter = QPainter(self)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+
+    def draw_scene(self):
+
+        pixmap = QPixmap(self.size())
+        painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(pixmap.rect(), QColor(255, 255, 255))
 
         for hex_coords, hexagon in self.board.hexes.items():
             self.draw_hex_outline(painter, hexagon)
@@ -415,6 +454,9 @@ class BoardWidget(QWidget):
 
             if self.draw_coordinates is True:
                 self.draw_coordiantes(painter, hexagon)
+
+        painter.end()
+        return pixmap
 
     def draw_terrain(self, painter: QPainter, hexagon: Hexagon):
         """Draw the terrain of a hexagon on the board."""
